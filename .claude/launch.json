@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "phonkbot",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["C:/Users/adria/Desktop/phonkbot/app.py"],
+      "port": 5001
+    }
+  ]
+}

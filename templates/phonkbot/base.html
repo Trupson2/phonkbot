@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhonkBot v{{ version }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+    <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+        font-family: 'Inter', -apple-system, sans-serif;
+        background: #0a0a0f;
+        color: #e2e8f0;
+        min-height: 100vh;
+    }
+    a { color: #ff4444; text-decoration: none; }
+    a:hover { color: #ff6666; }
+
+    /* Nav */
+    .nav {
+        display: flex; align-items: center; gap: 20px;
+        padding: 16px 24px;
+        background: rgba(15,15,25,0.9);
+        border-bottom: 1px solid rgba(255,68,68,0.15);
+        backdrop-filter: blur(12px);
+    }
+    .nav-logo {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 1.4rem; font-weight: 800;
+        color: #ff4444;
+        text-shadow: 0 0 20px rgba(255,68,68,0.4);
+        letter-spacing: -0.02em;
+    }
+    .nav-links { display: flex; gap: 6px; margin-left: auto; }
+    .nav-link {
+        padding: 8px 16px; border-radius: 8px;
+        font-size: 0.85rem; font-weight: 600;
+        color: #94a3b8; transition: all 0.2s;
+        display: flex; align-items: center; gap: 6px;
+    }
+    .nav-link:hover { background: rgba(255,68,68,0.1); color: #ff4444; }
+    .nav-link.active { background: rgba(255,68,68,0.15); color: #ff4444; }
+    .nav-link .material-symbols-outlined { font-size: 1.1rem; }
+
+    /* Content */
+    .content { padding: 24px; max-width: 1400px; margin: 0 auto; }
+
+    /* Cards */
+    .card {
+        background: rgba(15,15,25,0.8);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 14px;
+        padding: 20px;
+        backdrop-filter: blur(8px);
+    }
+    .card-title {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 0.75rem; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 1.5px;
+        color: #ff4444; margin-bottom: 14px;
+    }
+
+    /* Stats grid */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat-card {
+        background: rgba(15,15,25,0.8); border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 12px; padding: 16px; text-align: center;
+    }
+    .stat-val {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 2rem; font-weight: 800; line-height: 1;
+    }
+    .stat-label { font-size: 0.65rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-top: 6px; }
+
+    /* Buttons */
+    .btn {
+        padding: 10px 20px; border: none; border-radius: 10px;
+        font-weight: 700; font-size: 0.85rem; cursor: pointer;
+        display: inline-flex; align-items: center; gap: 6px;
+        transition: all 0.15s;
+    }
+    .btn:active { transform: scale(0.96); }
+    .btn-red { background: rgba(255,68,68,0.2); border: 1px solid rgba(255,68,68,0.3); color: #ff4444; }
+    .btn-red:hover { background: rgba(255,68,68,0.3); box-shadow: 0 0 15px rgba(255,68,68,0.2); }
+    .btn-green { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); color: #22c55e; }
+    .btn-gray { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); color: #94a3b8; }
+
+    /* Status dots */
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot-green { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.5); }
+    .dot-red { background: #ef4444; }
+    .dot-yellow { background: #eab308; animation: pulse 2s infinite; }
+    .dot-gray { background: #475569; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th { text-align: left; padding: 8px 10px; color: #64748b; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    tr:hover { background: rgba(255,68,68,0.03); }
+
+    /* Status badges */
+    .badge {
+        display: inline-block; padding: 3px 10px; border-radius: 6px;
+        font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+    }
+    .badge-green { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .badge-red { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .badge-yellow { background: rgba(234,179,8,0.15); color: #eab308; }
+    .badge-blue { background: rgba(59,130,246,0.15); color: #3b82f6; }
+    .badge-gray { background: rgba(100,116,139,0.15); color: #94a3b8; }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <nav class="nav">
+        <div class="nav-logo">PHONKBOT</div>
+        <div class="nav-links">
+            <a href="/" class="nav-link {% if active == 'dashboard' %}active{% endif %}">
+                <span class="material-symbols-outlined">dashboard</span> Dashboard
+            </a>
+            <a href="/tracks" class="nav-link {% if active == 'tracks' %}active{% endif %}">
+                <span class="material-symbols-outlined">library_music</span> Tracks
+            </a>
+            <a href="/settings" class="nav-link {% if active == 'settings' %}active{% endif %}">
+                <span class="material-symbols-outlined">settings</span> Settings
+            </a>
+            <a href="/launcher" class="nav-link" style="color:#64748b;margin-left:8px">
+                <span class="material-symbols-outlined">arrow_back</span> Wyjscie
+            </a>
+        </div>
+    </nav>
+    <div class="content">
+        {% block content %}{% endblock %}
+    </div>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

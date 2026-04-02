@@ -1,0 +1,219 @@
+{% extends "phonkbot/base.html" %}
+{% set active = 'dashboard' %}
+
+{% block content %}
+<!-- Stats -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-val" style="color:#ff4444">{{ stats.total_tracks }}</div>
+        <div class="stat-label">Total Tracks</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val" style="color:#22c55e">{{ stats.approved }}</div>
+        <div class="stat-label">Approved</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val" style="color:#ef4444">{{ stats.rejected }}</div>
+        <div class="stat-label">Rejected</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val" style="color:#eab308">{{ stats.pending_review }}</div>
+        <div class="stat-label">Pending Review</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val" style="color:#3b82f6">{{ stats.published }}</div>
+        <div class="stat-label">Published</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val" style="color:#8b5cf6">{{ stats.total_views }}</div>
+        <div class="stat-label">Total Views</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val" style="color:#ff4444">{{ stats.approval_rate }}%</div>
+        <div class="stat-label">Approval Rate</div>
+    </div>
+</div>
+
+<!-- Service Status + Actions -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+    <div class="card">
+        <div class="card-title">Service Status</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:10px;font-size:0.9rem">
+                <span class="dot {{ 'dot-green' if suno_ok else 'dot-red' }}"></span>
+                Suno API — {{ 'Connected' if suno_ok else 'Not configured' }}
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;font-size:0.9rem">
+                <span class="dot {{ 'dot-green' if telegram_ok else 'dot-red' }}"></span>
+                Telegram Bot — {{ 'Active' if telegram_ok else 'Not configured' }}
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;font-size:0.9rem">
+                <span class="dot {{ 'dot-green' if youtube_ok else 'dot-red' }}"></span>
+                YouTube API — {{ 'Authorized' if youtube_ok else 'Not configured' }}
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;font-size:0.9rem">
+                <span class="dot {{ 'dot-green' if auto_publish else 'dot-yellow' }}"></span>
+                Auto Pipeline — {{ 'Running' if auto_publish else 'Manual mode' }}
+            </div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-title">Actions</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+            <button class="btn btn-red" onclick="triggerPipeline()" id="btn-generate">
+                <span class="material-symbols-outlined" style="font-size:1.1rem">play_arrow</span>
+                Generate New Track
+            </button>
+            <a href="/settings" class="btn btn-gray">
+                <span class="material-symbols-outlined" style="font-size:1.1rem">settings</span>
+                Configure Services
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Tracks -->
+<div class="card" style="margin-bottom:20px">
+    <div class="card-title">Recent Tracks</div>
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Prompt</th>
+                <th>Duration</th>
+                <th>Status</th>
+                <th>Rating</th>
+                <th>YouTube</th>
+                <th>Created</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in recent_tracks %}
+            <tr>
+                <td>{{ t.id }}</td>
+                <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.suno_prompt[:80] }}</td>
+                <td>{{ "%.0f"|format(t.duration_seconds) }}s</td>
+                <td>
+                    {% if t.status == 'published' %}<span class="badge badge-green">Published</span>
+                    {% elif t.status == 'approved' %}<span class="badge badge-blue">Approved</span>
+                    {% elif t.status == 'ready_for_review' %}<span class="badge badge-yellow">Review</span>
+                    {% elif t.status == 'rejected' %}<span class="badge badge-red">Rejected</span>
+                    {% elif t.status == 'generating' %}<span class="badge badge-yellow">Generating</span>
+                    {% else %}<span class="badge badge-gray">{{ t.status }}</span>{% endif %}
+                </td>
+                <td>
+                    {% if t.rating == 1 %}&#128077;
+                    {% elif t.rating == 0 %}&#128078;
+                    {% else %}—{% endif %}
+                </td>
+                <td>
+                    {% if t.youtube_video_id %}
+                        <a href="https://youtube.com/watch?v={{ t.youtube_video_id }}" target="_blank">Watch</a>
+                    {% else %}—{% endif %}
+                </td>
+                <td style="color:#64748b;font-size:0.8rem">{{ t.created_at[:16] if t.created_at else '—' }}</td>
+            </tr>
+            {% endfor %}
+            {% if not recent_tracks %}
+            <tr><td colspan="7" style="text-align:center;color:#475569;padding:30px">No tracks yet. Click "Generate New Track" to start!</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Monthly Costs -->
+<div class="card" style="margin-bottom:20px">
+    <div class="card-title">Koszty miesięczne</div>
+    <table>
+        <thead>
+            <tr><th>Usługa</th><th>Koszt</th><th>Status</th><th>Uwagi</th></tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><span style="color:#ff4444;font-weight:700">Suno Pro</span></td>
+                <td style="font-weight:700">~42 PLN</td>
+                <td>{% if suno_ok %}<span class="badge badge-green">Active</span>{% else %}<span class="badge badge-red">Not connected</span>{% endif %}</td>
+                <td style="color:#64748b;font-size:0.8rem">$10/mies, ~500 utworów</td>
+            </tr>
+            <tr>
+                <td><span style="color:#8b5cf6;font-weight:700">Gemini API</span></td>
+                <td style="font-weight:700">~0-8 PLN</td>
+                <td>{% if config_gemini %}<span class="badge badge-green">Active</span>{% else %}<span class="badge badge-yellow">Optional</span>{% endif %}</td>
+                <td style="color:#64748b;font-size:0.8rem">Metadata generation</td>
+            </tr>
+            <tr>
+                <td><span style="color:#22c55e;font-weight:700">YouTube API</span></td>
+                <td style="font-weight:700;color:#22c55e">0 PLN</td>
+                <td>{% if youtube_ok %}<span class="badge badge-green">Active</span>{% else %}<span class="badge badge-gray">Free</span>{% endif %}</td>
+                <td style="color:#64748b;font-size:0.8rem">10K quota/dzien, 6 uploadów max</td>
+            </tr>
+            <tr>
+                <td><span style="color:#3b82f6;font-weight:700">FFmpeg</span></td>
+                <td style="font-weight:700;color:#22c55e">0 PLN</td>
+                <td><span class="badge badge-green">Lokalny</span></td>
+                <td style="color:#64748b;font-size:0.8rem">Open source, na Pi</td>
+            </tr>
+            <tr>
+                <td><span style="color:#8ff5ff;font-weight:700">Telegram Bot</span></td>
+                <td style="font-weight:700;color:#22c55e">0 PLN</td>
+                <td>{% if telegram_ok %}<span class="badge badge-green">Active</span>{% else %}<span class="badge badge-gray">Free</span>{% endif %}</td>
+                <td style="color:#64748b;font-size:0.8rem">Review & powiadomienia</td>
+            </tr>
+            <tr>
+                <td><span style="color:#f59e0b;font-weight:700">Pi 5 prąd</span></td>
+                <td style="font-weight:700">~4 PLN</td>
+                <td><span class="badge badge-green">Running</span></td>
+                <td style="color:#64748b;font-size:0.8rem">~50 PLN/rok, 5-10W</td>
+            </tr>
+            <tr style="border-top:2px solid rgba(255,68,68,0.2)">
+                <td><span style="font-weight:800;color:#fff">RAZEM</span></td>
+                <td style="font-weight:800;color:#ff4444;font-size:1.1rem">~46-54 PLN</td>
+                <td></td>
+                <td style="color:#64748b;font-size:0.8rem">miesięcznie</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Pipeline Logs -->
+<div class="card">
+    <div class="card-title">Pipeline Logs</div>
+    <div style="max-height:300px;overflow-y:auto">
+        {% for l in recent_logs %}
+        <div style="display:flex;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.03);font-size:0.8rem">
+            <span style="color:#64748b;min-width:130px">{{ l.created_at[:19] if l.created_at else '' }}</span>
+            <span class="badge {% if l.status == 'error' %}badge-red{% elif l.status == 'success' %}badge-green{% else %}badge-gray{% endif %}" style="min-width:60px;text-align:center">{{ l.status }}</span>
+            <span style="color:#94a3b8">{{ l.step }}</span>
+            <span>{{ l.message[:100] }}</span>
+        </div>
+        {% endfor %}
+        {% if not recent_logs %}
+        <div style="text-align:center;color:#475569;padding:20px">No logs yet</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function triggerPipeline() {
+    const btn = document.getElementById('btn-generate');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:1.1rem;animation:spin 1s linear infinite">sync</span> Generating...';
+    fetch('/api/pipeline/run', {method:'POST'})
+        .then(r => r.json())
+        .then(d => {
+            btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:1.1rem">check</span> Started!';
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:1.1rem">play_arrow</span> Generate New Track';
+            }, 3000);
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:1.1rem">error</span> Error';
+        });
+}
+</script>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+{% endblock %}

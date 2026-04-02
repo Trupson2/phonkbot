@@ -1,0 +1,104 @@
+{% extends "phonkbot/base.html" %}
+{% set active = 'settings' %}
+
+{% block content %}
+<form method="POST" style="max-width:700px">
+    <!-- Suno -->
+    <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Suno AI</div>
+        <label style="display:block;margin-bottom:12px">
+            <span style="font-size:0.8rem;color:#94a3b8">API URL (self-hosted wrapper)</span>
+            <input type="text" name="suno_api_url" value="{{ config.suno_api_url }}"
+                   style="width:100%;padding:10px;background:#12122a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:0.9rem;margin-top:4px">
+        </label>
+        <label style="display:block">
+            <span style="font-size:0.8rem;color:#94a3b8">Suno Cookie (from browser)</span>
+            <textarea name="suno_cookie" rows="3"
+                      style="width:100%;padding:10px;background:#12122a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:0.8rem;font-family:monospace;margin-top:4px;resize:vertical">{{ config.suno_cookie }}</textarea>
+        </label>
+    </div>
+
+    <!-- Telegram -->
+    <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Telegram Bot</div>
+        <label style="display:block;margin-bottom:12px">
+            <span style="font-size:0.8rem;color:#94a3b8">Bot Token (from @BotFather)</span>
+            <input type="text" name="telegram_bot_token" value="{{ config.telegram_bot_token }}"
+                   style="width:100%;padding:10px;background:#12122a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:0.9rem;margin-top:4px">
+        </label>
+        <label style="display:block">
+            <span style="font-size:0.8rem;color:#94a3b8">Chat ID (your Telegram user ID)</span>
+            <input type="text" name="telegram_chat_id" value="{{ config.telegram_chat_id }}"
+                   style="width:100%;padding:10px;background:#12122a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:0.9rem;margin-top:4px">
+        </label>
+    </div>
+
+    <!-- YouTube -->
+    <div class="card" style="margin-bottom:16px">
+        <div class="card-title">YouTube API</div>
+        <label style="display:block;margin-bottom:12px">
+            <span style="font-size:0.8rem;color:#94a3b8">Client ID (Google Cloud Console)</span>
+            <input type="text" name="youtube_client_id" value="{{ config.youtube_client_id }}"
+                   style="width:100%;padding:10px;background:#12122a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:0.9rem;margin-top:4px">
+        </label>
+        <label style="display:block">
+            <span style="font-size:0.8rem;color:#94a3b8">Client Secret</span>
+            <input type="password" name="youtube_client_secret" value="{{ config.youtube_client_secret }}"
+                   style="width:100%;padding:10px;background:#12122a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:0.9rem;margin-top:4px">
+        </label>
+    </div>
+
+    <!-- Gemini -->
+    <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Gemini AI</div>
+        <label style="display:block">
+            <span style="font-size:0.8rem;color:#94a3b8">API Key</span>
+            <input type="password" name="gemini_api_key" value="{{ config.gemini_api_key }}"
+                   style="width:100%;padding:10px;background:#12122a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:0.9rem;margin-top:4px">
+        </label>
+    </div>
+
+    <!-- Pipeline -->
+    <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Pipeline Settings</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <label>
+                <span style="font-size:0.8rem;color:#94a3b8">Interval (hours)</span>
+                <input type="number" name="pipeline_interval_hours" value="{{ config.pipeline_interval_hours }}" min="1" max="24"
+                       style="width:100%;padding:10px;background:#12122a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:0.9rem;margin-top:4px">
+            </label>
+            <label>
+                <span style="font-size:0.8rem;color:#94a3b8">Max tracks/day</span>
+                <input type="number" name="max_tracks_per_day" value="{{ config.max_tracks_per_day }}" min="1" max="10"
+                       style="width:100%;padding:10px;background:#12122a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:0.9rem;margin-top:4px">
+            </label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+            <label>
+                <span style="font-size:0.8rem;color:#94a3b8">Language</span>
+                <select name="default_language" style="width:100%;padding:10px;background:#12122a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:0.9rem;margin-top:4px">
+                    <option value="en" {{ 'selected' if config.default_language == 'en' }}>English</option>
+                    <option value="pl" {{ 'selected' if config.default_language == 'pl' }}>Polski</option>
+                </select>
+            </label>
+            <label>
+                <span style="font-size:0.8rem;color:#94a3b8">Visualization</span>
+                <select name="visualization_style" style="width:100%;padding:10px;background:#12122a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:0.9rem;margin-top:4px">
+                    <option value="waveform" {{ 'selected' if config.visualization_style == 'waveform' }}>Waveform (light CPU)</option>
+                    <option value="bars" {{ 'selected' if config.visualization_style == 'bars' }}>Frequency Bars (medium)</option>
+                    <option value="scope" {{ 'selected' if config.visualization_style == 'scope' }}>Vector Scope (heavy)</option>
+                </select>
+            </label>
+        </div>
+        <label style="display:flex;align-items:center;gap:10px;margin-top:16px;cursor:pointer">
+            <input type="checkbox" name="auto_publish" value="1" {{ 'checked' if config.auto_publish == '1' }}
+                   style="width:18px;height:18px;accent-color:#ff4444">
+            <span style="font-size:0.9rem">Enable auto-pipeline (scheduler runs every N hours)</span>
+        </label>
+    </div>
+
+    <button type="submit" class="btn btn-red" style="width:100%;justify-content:center;padding:14px">
+        <span class="material-symbols-outlined">save</span> Save Settings
+    </button>
+</form>
+{% endblock %}
