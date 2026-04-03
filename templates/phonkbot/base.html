@@ -127,9 +127,10 @@
             <a href="/settings" class="nav-link {% if active == 'settings' %}active{% endif %}">
                 <span class="material-symbols-outlined">settings</span> Settings
             </a>
-            <a href="/launcher" class="nav-link" style="color:#64748b;margin-left:8px">
-                <span class="material-symbols-outlined">arrow_back</span> Wyjscie
+            <a href="" class="nav-link" style="color:#8ff5ff;margin-left:8px" id="akces-link">
+                <span class="material-symbols-outlined">arrow_back</span> AKCES HUB
             </a>
+            <script>document.getElementById('akces-link').href='http://'+location.hostname+':5000/dashboard';</script>
         </div>
     </nav>
     <div class="content">
