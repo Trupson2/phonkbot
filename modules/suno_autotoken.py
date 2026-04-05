@@ -116,10 +116,26 @@ async def _do_refresh(headless=True, login_timeout=300000):
         logged_in = _has_auth_cookies(initial_cookies + clerk_cookies)
 
         if not logged_in and headless:
-            log_warning("AutoToken: not logged in — run: python3 auto_token_setup.py")
-            await ctx.close()
-            await pw.stop()
-            return None
+            # Wait for auto-login via saved OAuth session (Google/Discord)
+            log("AutoToken: waiting for auto-login via saved OAuth session...")
+            for i in range(20):  # wait up to 60 seconds
+                await page.wait_for_timeout(3000)
+                all_c = []
+                for domain in ['https://suno.com', 'https://clerk.suno.com', 'https://auth.suno.com']:
+                    try:
+                        all_c.extend(await ctx.cookies(domain))
+                    except Exception:
+                        pass
+                if _has_auth_cookies(all_c):
+                    logged_in = True
+                    log("AutoToken: auto-login successful!")
+                    break
+
+            if not logged_in:
+                log_warning("AutoToken: not logged in — run: python3 auto_token_setup.py")
+                await ctx.close()
+                await pw.stop()
+                return None
 
         if not logged_in and not headless:
             print()
