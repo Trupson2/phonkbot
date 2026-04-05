@@ -105,6 +105,7 @@ def init_db():
     conn.execute('''CREATE TABLE IF NOT EXISTS tracks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         channel_id INTEGER DEFAULT NULL,
+        title TEXT DEFAULT '',
         suno_prompt TEXT DEFAULT '',
         suno_style TEXT DEFAULT 'phonk',
         suno_id TEXT DEFAULT '',
@@ -118,6 +119,34 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (channel_id) REFERENCES channels(id)
     )''')
+
+    # Add title column if missing (migration for existing DBs)
+    try:
+        conn.execute("SELECT title FROM tracks LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE tracks ADD COLUMN title TEXT DEFAULT ''")
+        conn.commit()
+
+    # Add model column if missing
+    try:
+        conn.execute("SELECT model FROM tracks LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE tracks ADD COLUMN model TEXT DEFAULT ''")
+        conn.commit()
+
+    # Add reject_reason column if missing
+    try:
+        conn.execute("SELECT reject_reason FROM tracks LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE tracks ADD COLUMN reject_reason TEXT DEFAULT NULL")
+        conn.commit()
+
+    # Add reject_reason to training_data if missing
+    try:
+        conn.execute("SELECT reject_reason FROM training_data LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE training_data ADD COLUMN reject_reason TEXT DEFAULT NULL")
+        conn.commit()
 
     conn.execute('''CREATE TABLE IF NOT EXISTS videos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

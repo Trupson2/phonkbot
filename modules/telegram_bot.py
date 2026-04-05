@@ -11,9 +11,12 @@ from modules.database import get_db, get_config, set_config
 
 _APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# Pending reject reasons: {chat_id: track_id} — waiting for user to type reason
+_pending_reject = {}
+
 
 def send_track_for_review(track_id):
-    """Send a track audio to Telegram with inline review buttons."""
+    """Send a track audio + video preview to Telegram with inline review buttons."""
     token = get_config('telegram_bot_token')
     chat_id = get_config('telegram_chat_id')
     if not token or not chat_id:
@@ -31,7 +34,16 @@ def send_track_for_review(track_id):
         log_error(f"Audio file not found: {audio_path}")
         return False
 
-    # Send audio with caption
+    # Check if video/thumbnail exists for preview
+    video = conn.execute(
+        'SELECT * FROM videos WHERE track_id = ? ORDER BY id DESC LIMIT 1', (track_id,)
+    ).fetchone()
+
+    # Send video preview or thumbnail first (before audio + buttons)
+    if video:
+        _send_video_preview(token, chat_id, track_id, video)
+
+    # Send audio with caption and review buttons
     caption = (
         f"Track #{track_id}\n"
         f"Prompt: {track['suno_prompt'][:200]}\n"
@@ -73,6 +85,75 @@ def send_track_for_review(track_id):
     except Exception as e:
         log_error(f"Failed to send track to Telegram: {e}")
         return False
+
+
+def _send_video_preview(token, chat_id, track_id, video):
+    """Send video preview (short clip or thumbnail) to Telegram before review buttons."""
+    # Try thumbnail first (fast, small)
+    thumb_path = video['thumbnail_path'] if video and video['thumbnail_path'] else None
+    if thumb_path and os.path.exists(thumb_path):
+        try:
+            with open(thumb_path, 'rb') as f:
+                resp = requests.post(
+                    f'https://api.telegram.org/bot{token}/sendPhoto',
+                    data={
+                        'chat_id': chat_id,
+                        'caption': f"Podglad wizualizacji - Track #{track_id}",
+                    },
+                    files={'photo': (f'thumb_{track_id}.jpg', f, 'image/jpeg')},
+                    timeout=30,
+                )
+            if resp.status_code == 200:
+                log(f"Telegram: thumbnail preview sent for track #{track_id}")
+                return True
+        except Exception as e:
+            log_error(f"Telegram thumbnail send error: {e}")
+
+    # Try sending short video preview (first 15s, compressed)
+    video_path = video['video_path'] if video and video['video_path'] else None
+    if video_path and os.path.exists(video_path):
+        preview_path = video_path.replace('.mp4', '_preview.mp4')
+        try:
+            import subprocess
+            # Extract first 15s at lower quality for preview
+            result = subprocess.run([
+                'ffmpeg', '-i', video_path,
+                '-t', '15',
+                '-vf', 'scale=640:360',
+                '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+                '-c:a', 'aac', '-b:a', '96k',
+                '-y', preview_path,
+            ], capture_output=True, text=True, timeout=60)
+
+            if result.returncode == 0 and os.path.exists(preview_path):
+                file_size = os.path.getsize(preview_path)
+                if file_size < 50 * 1024 * 1024:  # Telegram limit 50MB
+                    with open(preview_path, 'rb') as f:
+                        resp = requests.post(
+                            f'https://api.telegram.org/bot{token}/sendVideo',
+                            data={
+                                'chat_id': chat_id,
+                                'caption': f"Podglad wizualizacji (15s) - Track #{track_id}",
+                                'supports_streaming': 'true',
+                            },
+                            files={'video': (f'preview_{track_id}.mp4', f, 'video/mp4')},
+                            timeout=120,
+                        )
+                    if resp.status_code == 200:
+                        log(f"Telegram: video preview sent for track #{track_id}")
+                    else:
+                        log_error(f"Telegram video preview error: {resp.status_code}")
+
+                # Clean up preview file
+                try:
+                    os.remove(preview_path)
+                except:
+                    pass
+
+        except Exception as e:
+            log_error(f"Telegram video preview error: {e}")
+
+    return False
 
 
 def send_message(text):
@@ -130,14 +211,11 @@ def handle_callback(data):
             log_error(f"Failed to start post-approval pipeline: {e}")
 
     elif action == 'reject':
-        conn.execute("""UPDATE tracks SET status = 'rejected', rating = 0,
-                        rating_timestamp = CURRENT_TIMESTAMP WHERE id = ?""", (track_id,))
-        conn.commit()
-
-        _save_training_data(track_id, 0)
-
-        log(f"Track #{track_id} REJECTED via Telegram")
-        send_message(f"Track #{track_id} rejected. Data saved for training.")
+        # Ask for reason instead of rejecting immediately
+        chat_id = get_config('telegram_chat_id')
+        if chat_id:
+            _pending_reject[str(chat_id)] = track_id
+            send_message(f"Track #{track_id} — dlaczego odrzucasz? Napisz powod:")
 
     elif action == 'regen':
         conn.execute("UPDATE tracks SET status = 'regenerate' WHERE id = ?", (track_id,))
@@ -154,7 +232,21 @@ def handle_callback(data):
             log_error(f"Failed to start regeneration: {e}")
 
 
-def _save_training_data(track_id, rating):
+def _do_reject(track_id, reason):
+    """Reject a track with a reason from the user."""
+    conn = get_db()
+    conn.execute("""UPDATE tracks SET status = 'rejected', rating = 0,
+                    rating_timestamp = CURRENT_TIMESTAMP, reject_reason = ?
+                    WHERE id = ?""", (reason, track_id))
+    conn.commit()
+
+    _save_training_data(track_id, 0, reason)
+
+    log(f"Track #{track_id} REJECTED — reason: {reason}")
+    send_message(f"Track #{track_id} odrzucony.\nPowod: _{reason}_")
+
+
+def _save_training_data(track_id, rating, reject_reason=None):
     """Save track data for quality model training."""
     conn = get_db()
     track = conn.execute('SELECT * FROM tracks WHERE id = ?', (track_id,)).fetchone()
@@ -170,9 +262,9 @@ def _save_training_data(track_id, rating):
         except:
             pass
 
-    conn.execute('''INSERT INTO training_data (track_id, suno_prompt, suno_style, audio_features, rating)
-                    VALUES (?, ?, ?, ?, ?)''',
-                 (track_id, track['suno_prompt'], track['suno_style'], audio_features, rating))
+    conn.execute('''INSERT INTO training_data (track_id, suno_prompt, suno_style, audio_features, rating, reject_reason)
+                    VALUES (?, ?, ?, ?, ?, ?)''',
+                 (track_id, track['suno_prompt'], track['suno_style'], audio_features, rating, reject_reason))
     conn.commit()
 
 
@@ -214,6 +306,14 @@ def _polling_loop(token):
                 elif 'message' in update:
                     msg = update['message']
                     text = msg.get('text', '')
+                    sender_chat_id = str(msg.get('chat', {}).get('id', ''))
+
+                    # Check if user is providing a reject reason
+                    if sender_chat_id in _pending_reject and text and not text.startswith('/'):
+                        track_id = _pending_reject.pop(sender_chat_id)
+                        _do_reject(track_id, text)
+                        continue
+
                     if text == '/status':
                         from modules.database import get_db as _gdb
                         c = _gdb()
