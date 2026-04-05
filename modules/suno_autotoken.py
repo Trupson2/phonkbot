@@ -212,6 +212,10 @@ async def _do_refresh(headless=True, login_timeout=300000):
 
         cookie_str = '; '.join(f'{k}={v}' for k, v in seen.items())
 
+        # Update refresh token with fresh __client cookie
+        if '__client' in seen:
+            set_config('suno_refresh_token', seen['__client'])
+
         # Try to extract JWT from __session cookie
         jwt = seen.get('__session')
 
