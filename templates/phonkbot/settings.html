@@ -69,7 +69,7 @@
             </label>
             <label>
                 <span style="font-size:0.8rem;color:#94a3b8">Max tracks/day</span>
-                <input type="number" name="max_tracks_per_day" value="{{ config.max_tracks_per_day }}" min="1" max="10"
+                <input type="number" name="max_tracks_per_day" value="{{ config.max_tracks_per_day }}" min="1" max="100"
                        style="width:100%;padding:10px;background:#12122a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:0.9rem;margin-top:4px">
             </label>
         </div>
@@ -87,6 +87,7 @@
                     <option value="waveform" {{ 'selected' if config.visualization_style == 'waveform' }}>Waveform (light CPU)</option>
                     <option value="bars" {{ 'selected' if config.visualization_style == 'bars' }}>Frequency Bars (medium)</option>
                     <option value="scope" {{ 'selected' if config.visualization_style == 'scope' }}>Vector Scope (heavy)</option>
+                    <option value="aurora" {{ 'selected' if config.visualization_style == 'aurora' }}>Aurora Glow (medium)</option>
                 </select>
             </label>
         </div>
