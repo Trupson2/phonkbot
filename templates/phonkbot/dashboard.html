@@ -60,14 +60,38 @@
     <div class="card">
         <div class="card-title">Actions</div>
         <div style="display:flex;flex-direction:column;gap:10px">
-            <button class="btn btn-red" onclick="triggerPipeline()" id="btn-generate">
-                <span class="material-symbols-outlined" style="font-size:1.1rem">play_arrow</span>
-                Generate New Track
-            </button>
+            <div style="display:flex;gap:8px;align-items:center">
+                <select id="suno-model" style="flex:1;padding:10px;background:#12122a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:0.85rem">
+                    <option value="chirp-v4" {{ 'selected' if suno_model == 'chirp-v4' else '' }}>v4.0</option>
+                    <option value="chirp-v4-5" {{ 'selected' if suno_model == 'chirp-v4-5' else '' }}>v4.5</option>
+                    <option value="chirp-v4-5-plus" {{ 'selected' if suno_model == 'chirp-v4-5-plus' else '' }}>v4.5+</option>
+                    <option value="chirp-v5" {{ 'selected' if suno_model == 'chirp-v5' else '' }}>v5</option>
+                    <option value="chirp-fenix" {{ 'selected' if suno_model == 'chirp-fenix' else '' }}>v5.5</option>
+                </select>
+                <button class="btn btn-red" onclick="saveModelAndGenerate()" id="btn-generate" style="flex:2">
+                    <span class="material-symbols-outlined" style="font-size:1.1rem">play_arrow</span>
+                    Generate
+                </button>
+            </div>
             <a href="/settings" class="btn btn-gray">
                 <span class="material-symbols-outlined" style="font-size:1.1rem">settings</span>
                 Configure Services
             </a>
+            <!-- Live Progress -->
+            <div id="progress-box" style="display:none;margin-top:8px;padding:12px;background:#0a0a1a;border:1px solid rgba(255,255,255,0.1);border-radius:8px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                    <span id="prog-icon" class="material-symbols-outlined" style="font-size:1.2rem;color:#ef4444;animation:spin 1s linear infinite">sync</span>
+                    <div>
+                        <div id="prog-title" style="font-size:0.9rem;font-weight:600;color:#fff">Track #?</div>
+                        <div id="prog-label" style="font-size:0.75rem;color:#94a3b8">Generowanie...</div>
+                    </div>
+                    <div id="prog-time" style="margin-left:auto;font-size:0.8rem;color:#64748b">0:00</div>
+                </div>
+                <div style="width:100%;height:4px;background:#1e1e3a;border-radius:2px;overflow:hidden">
+                    <div id="prog-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#ef4444,#f97316);border-radius:2px;transition:width 0.5s ease"></div>
+                </div>
+                <div id="prog-prompt" style="font-size:0.7rem;color:#475569;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+            </div>
         </div>
     </div>
 </div>
@@ -80,6 +104,7 @@
             <tr>
                 <th>#</th>
                 <th>Prompt</th>
+                <th>Model</th>
                 <th>Duration</th>
                 <th>Status</th>
                 <th>Rating</th>
@@ -92,6 +117,7 @@
             <tr>
                 <td>{{ t.id }}</td>
                 <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.suno_prompt[:80] }}</td>
+                <td style="font-size:0.75rem;color:#a78bfa">{{ (t.model or '—')|replace('chirp-fenix','v5.5')|replace('chirp-v4-5-plus','v4.5+')|replace('chirp-v4-5','v4.5')|replace('chirp-v5','v5')|replace('chirp-v4','v4') }}</td>
                 <td>{{ "%.0f"|format(t.duration_seconds) }}s</td>
                 <td>
                     {% if t.status == 'published' %}<span class="badge badge-green">Published</span>
@@ -196,6 +222,13 @@
 
 {% block extra_js %}
 <script>
+function saveModelAndGenerate() {
+    const model = document.getElementById('suno-model').value;
+    fetch('/api/set-model', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({model:model})})
+        .then(() => triggerPipeline())
+        .catch(() => triggerPipeline());
+}
+
 function triggerPipeline() {
     const btn = document.getElementById('btn-generate');
     btn.disabled = true;
@@ -203,10 +236,11 @@ function triggerPipeline() {
     fetch('/api/pipeline/run', {method:'POST'})
         .then(r => r.json())
         .then(d => {
+            startProgressPolling();
             btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:1.1rem">check</span> Started!';
             setTimeout(() => {
                 btn.disabled = false;
-                btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:1.1rem">play_arrow</span> Generate New Track';
+                btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:1.1rem">play_arrow</span> Generate';
             }, 3000);
         })
         .catch(() => {
@@ -214,6 +248,52 @@ function triggerPipeline() {
             btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:1.1rem">error</span> Error';
         });
 }
+
+let pollTimer = null;
+function startProgressPolling() {
+    document.getElementById('progress-box').style.display = 'block';
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(pollProgress, 3000);
+    pollProgress();
+}
+
+function pollProgress() {
+    fetch('/api/track/status').then(r=>r.json()).then(d => {
+        const box = document.getElementById('progress-box');
+        if (!d.active && d.status !== 'generating') {
+            // Show final state briefly then hide
+            updateProgress(d);
+            setTimeout(() => {
+                box.style.display = 'none';
+                if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+                location.reload();
+            }, 5000);
+            return;
+        }
+        updateProgress(d);
+    }).catch(() => {});
+}
+
+function updateProgress(d) {
+    document.getElementById('prog-title').textContent = d.title || 'Track #' + d.track_id;
+    document.getElementById('prog-label').textContent = d.label || d.status;
+    document.getElementById('prog-bar').style.width = (d.progress || 0) + '%';
+    document.getElementById('prog-prompt').textContent = d.prompt || '';
+
+    const icon = document.getElementById('prog-icon');
+    icon.textContent = d.icon || 'sync';
+    icon.style.animation = d.active ? 'spin 1s linear infinite' : 'none';
+    icon.style.color = d.status === 'failed' ? '#ef4444' : d.status === 'published' ? '#22c55e' : '#f97316';
+
+    const mins = Math.floor((d.elapsed||0) / 60);
+    const secs = (d.elapsed||0) % 60;
+    document.getElementById('prog-time').textContent = mins + ':' + String(secs).padStart(2,'0');
+}
+
+// Auto-check on page load if something is generating
+fetch('/api/track/status').then(r=>r.json()).then(d => {
+    if (d.active) startProgressPolling();
+}).catch(() => {});
 </script>
 <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 {% endblock %}
