@@ -449,10 +449,11 @@ class SunoClient:
                 timeout=self.timeout,
             )
 
-            if resp.status_code == 401:
-                # Token expired, try refresh once
-                log_warning("Suno: 401, refreshing token...")
+            if resp.status_code in (401, 422):
+                # Token expired or invalid, force refresh
+                log_warning(f"Suno: {resp.status_code}, forcing token refresh...")
                 self.jwt = None
+                set_config('suno_jwt', '')
                 if self._ensure_auth():
                     resp = requests.post(
                         f'{SUNO_API_BASE}/api/generate/v2/',
