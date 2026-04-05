@@ -338,6 +338,19 @@ class SunoClient:
                     log("Suno auth: JWT refreshed via Clerk")
                     return True
 
+        # Method 3: AutoToken browser refresh (last resort)
+        try:
+            from modules.suno_autotoken import refresh as _autotoken_refresh, is_available as _autotoken_ok
+            if _autotoken_ok():
+                log("Suno auth: trying AutoToken browser refresh...")
+                if _autotoken_refresh():
+                    saved_jwt = get_config('suno_jwt', '')
+                    if saved_jwt and self._jwt_valid(saved_jwt):
+                        self.jwt = saved_jwt
+                        return True
+        except Exception as e:
+            log_error(f"Suno auth: AutoToken fallback failed — {e}")
+
         log_error("Suno auth: all methods failed")
         return False
 
