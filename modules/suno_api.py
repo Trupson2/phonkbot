@@ -439,8 +439,14 @@ class SunoClient:
         except Exception:
             pass
 
+        # Suno semantics:
+        #   gpt_description_prompt = "Song Description" (Simple mode) — natural-language style brief
+        #   prompt                 = explicit lyrics (Custom mode); empty for instrumental
+        #   tags                   = comma-separated style tags
+        # Putting our descriptive text into `prompt` made Suno render <30s clips,
+        # because with make_instrumental=True it treated the description as malformed lyrics.
         payload = {
-            "gpt_description_prompt": None,
+            "gpt_description_prompt": prompt or None,
             "prompt": "",
             "tags": style,
             "mv": get_config('suno_model', 'chirp-v4'),
@@ -449,10 +455,6 @@ class SunoClient:
             "generation_type": "TEXT",
             "token": captcha_token,
         }
-
-        # For custom generation, use prompt in the right field
-        if prompt:
-            payload["prompt"] = prompt
 
         try:
             resp = requests.post(
@@ -584,22 +586,27 @@ class SunoClient:
             return False
 
     def wait_for_completion(self, task_ids, poll_interval=30, max_wait=600):
-        """Poll until generation completes or timeout."""
+        """Poll until generation completes or timeout.
+
+        Suno returns audio_url early during 'streaming' stage — that file is
+        a partial that grows as generation progresses. Only treat the song as
+        ready when status == 'complete'.
+        """
         start = time.time()
         while time.time() - start < max_wait:
             songs = self.check_status(task_ids)
-            completed = [s for s in songs if s.get('audio_url')]
-            if completed:
-                return completed
 
-            failed = [s for s in songs if s.get('status') in ('error', 'failed', 'complete')]
-            # 'complete' without audio_url means generation failed silently
-            error_only = [s for s in failed if s.get('status') in ('error', 'failed')]
+            error_only = [s for s in songs if s.get('status') in ('error', 'failed')]
             if error_only:
                 log_error(f"Suno: generation failed — {error_only}")
                 return []
 
-            log(f"Suno: waiting... ({int(time.time() - start)}s elapsed)")
+            completed = [s for s in songs if s.get('status') == 'complete' and s.get('audio_url')]
+            if completed:
+                return completed
+
+            statuses = [f"{s.get('status', '?')}" for s in songs] if songs else ['no-data']
+            log(f"Suno: waiting... ({int(time.time() - start)}s elapsed, status: {','.join(statuses)})")
             time.sleep(poll_interval)
 
         log_error(f"Suno: timeout after {max_wait}s")
@@ -871,7 +878,9 @@ def regenerate_from_track(old_track_id):
 
 
 def _get_audio_duration(audio_path):
-    """Get audio duration in seconds using ffprobe."""
+    """Get audio duration in seconds. Tries ffprobe, then mutagen, then a
+    bitrate-based estimate from file size as last resort (so tracks never
+    show as 0s when we have a valid mp3 in hand)."""
     try:
         import subprocess
         result = subprocess.run(
@@ -879,6 +888,21 @@ def _get_audio_duration(audio_path):
              '-of', 'csv=p=0', audio_path],
             capture_output=True, text=True, timeout=10,
         )
-        return float(result.stdout.strip())
-    except:
+        d = float(result.stdout.strip())
+        if d > 0:
+            return d
+    except (FileNotFoundError, subprocess.SubprocessError, ValueError):
+        pass
+
+    try:
+        from mutagen.mp3 import MP3
+        return float(MP3(audio_path).info.length)
+    except Exception:
+        pass
+
+    try:
+        size_bytes = os.path.getsize(audio_path)
+        # Suno renders ~192 kbps mp3 → 24,000 bytes/sec
+        return round(size_bytes / 24000, 1)
+    except Exception:
         return 0.0
