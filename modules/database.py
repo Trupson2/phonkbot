@@ -148,6 +148,13 @@ def init_db():
         conn.execute("ALTER TABLE training_data ADD COLUMN reject_reason TEXT DEFAULT NULL")
         conn.commit()
 
+    # Suno generuje 2 wersje per request — przechowujemy obie i wskazujemy bliźniaka
+    try:
+        conn.execute("SELECT sibling_track_id FROM tracks LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE tracks ADD COLUMN sibling_track_id INTEGER DEFAULT NULL REFERENCES tracks(id)")
+        conn.commit()
+
     conn.execute('''CREATE TABLE IF NOT EXISTS videos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         track_id INTEGER NOT NULL,
@@ -201,16 +208,31 @@ def init_db():
         FOREIGN KEY (track_id) REFERENCES tracks(id)
     )''')
 
+    conn.execute('''CREATE TABLE IF NOT EXISTS token_push_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_ip TEXT DEFAULT '',
+        keys_pushed TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_tracks_status     ON tracks(status, created_at DESC)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_publications_pub  ON publications(published_at DESC)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_pipeline_logs_tid ON pipeline_logs(track_id, created_at DESC)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_videos_track      ON videos(track_id, status)')
+
     # Default config values
     defaults = {
         'suno_api_url': 'http://localhost:3000',
         'suno_cookie': '',
+        'suno_model': 'chirp-v4',
         'pipeline_interval_hours': '5',
         'max_tracks_per_day': '3',
         'default_language': 'en',
-        'visualization_style': 'waveform',
+        'visualization_style': 'phonk',
         'telegram_bot_token': '',
         'telegram_chat_id': '',
+        'telegram_webhook_enabled': '0',
+        'telegram_webhook_url': '',
         'youtube_client_id': '',
         'youtube_client_secret': '',
         'youtube_access_token': '',
@@ -219,10 +241,25 @@ def init_db():
         'youtube_quota_used': '0',
         'youtube_quota_reset_date': '',
         'gemini_api_key': '',
+        'gemini_model': 'gemini-2.0-flash',
+        'pexels_api_key': '',
         'auto_publish': '0',
+        'captcha_max_age_seconds': '5400',  # 90 min — skip pipeline tick if older
+        'backup_retention_days': '14',
     }
     for key, value in defaults.items():
         conn.execute('INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)', (key, value))
+
+    # Generate admin push secret on first init (LAN-bound, ale lepiej miec)
+    existing_secret = conn.execute(
+        "SELECT value FROM config WHERE key = 'admin_push_secret'"
+    ).fetchone()
+    if not existing_secret or not existing_secret['value']:
+        import secrets as _secrets
+        conn.execute(
+            'INSERT OR REPLACE INTO config (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)',
+            ('admin_push_secret', _secrets.token_urlsafe(32))
+        )
 
     conn.commit()
     print("[PhonkBot] Database initialized")

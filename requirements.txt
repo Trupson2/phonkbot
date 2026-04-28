@@ -1,3 +1,9 @@
+# PhonkBot — core runtime dependencies
+# Install: pip install -r requirements.txt
+# Optional Playwright stack (captcha solver, autotoken):
+#     pip install -r requirements-playwright.txt
+#     playwright install chromium --with-deps
+
 flask>=3.0.0
 flask-cors>=4.0.0
 waitress>=3.0.0
@@ -5,10 +11,17 @@ requests>=2.31.0
 python-dotenv>=1.0.0
 schedule>=1.2.0
 Pillow>=10.0.0
+mutagen>=1.47.0          # mp3 duration fallback when ffprobe missing
+
+# Google APIs (Gemini metadata + YouTube upload)
+google-genai>=0.3.0
 google-generativeai>=0.8.0
 google-auth>=2.0.0
 google-auth-oauthlib>=1.0.0
 google-api-python-client>=2.0.0
+
+# Telegram bot (long-poll mode)
 python-telegram-bot>=21.0
-scikit-learn>=1.3.0
+
+# Misc
 psutil>=5.9.0

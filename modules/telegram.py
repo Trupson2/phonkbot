@@ -204,7 +204,7 @@ def handle_callback(data):
 
         # Trigger render + upload pipeline for this track
         try:
-            from modules.scheduler import process_approved_track
+            from modules.pipeline.scheduler import process_approved_track
             t = threading.Thread(target=process_approved_track, args=(track_id,), daemon=True)
             t.start()
         except Exception as e:
@@ -225,7 +225,7 @@ def handle_callback(data):
         send_message(f"Track #{track_id} queued for regeneration with similar prompt.")
 
         try:
-            from modules.scheduler import regenerate_track
+            from modules.pipeline.scheduler import regenerate_track
             t = threading.Thread(target=regenerate_track, args=(track_id,), daemon=True)
             t.start()
         except Exception as e:
@@ -257,7 +257,7 @@ def _save_training_data(track_id, rating, reject_reason=None):
     audio_features = '{}'
     if track['audio_path'] and os.path.exists(track['audio_path']):
         try:
-            from modules.video_renderer import get_audio_features
+            from modules.video import get_audio_features
             audio_features = get_audio_features(track['audio_path'])
         except:
             pass
@@ -329,7 +329,7 @@ def _polling_loop(token):
                     elif text == '/generate':
                         send_message("Generating new track...")
                         try:
-                            from modules.scheduler import run_pipeline_once
+                            from modules.pipeline.scheduler import run_pipeline_once
                             t = threading.Thread(target=run_pipeline_once, daemon=True)
                             t.start()
                         except Exception as e:
@@ -348,3 +348,57 @@ def start_telegram_bot(token):
     t = threading.Thread(target=_polling_loop, args=(token,), daemon=True)
     t.start()
     return t
+
+
+def handle_update(update):
+    """Process a single Telegram update dict (used by webhook receiver).
+
+    Same logic as the long-polling loop but stateless — Flask calls this
+    per-request when telegram_webhook_enabled=1. Long-polling and webhook
+    are mutually exclusive in practice (Telegram refuses both at once).
+    """
+    if not isinstance(update, dict):
+        return
+
+    if 'callback_query' in update:
+        cb = update['callback_query']
+        handle_callback(cb.get('data', ''))
+        token = get_config('telegram_bot_token', '')
+        if token:
+            try:
+                requests.post(
+                    f'https://api.telegram.org/bot{token}/answerCallbackQuery',
+                    json={'callback_query_id': cb.get('id')},
+                    timeout=5,
+                )
+            except Exception:
+                pass
+        return
+
+    if 'message' in update:
+        msg = update['message']
+        text = msg.get('text', '')
+        sender_chat_id = str(msg.get('chat', {}).get('id', ''))
+
+        if sender_chat_id in _pending_reject and text and not text.startswith('/'):
+            track_id = _pending_reject.pop(sender_chat_id)
+            _do_reject(track_id, text)
+            return
+
+        if text == '/status':
+            from modules.database import get_db as _gdb
+            c = _gdb()
+            pending = c.execute("SELECT COUNT(*) FROM tracks WHERE status = 'ready_for_review'").fetchone()[0]
+            published = c.execute("SELECT COUNT(*) FROM publications WHERE status = 'published'").fetchone()[0]
+            total = c.execute("SELECT COUNT(*) FROM tracks").fetchone()[0]
+            send_message(
+                f"*PhonkBot Status*\nTotal tracks: {total}\n"
+                f"Pending review: {pending}\nPublished: {published}"
+            )
+        elif text == '/generate':
+            send_message("Generating new track...")
+            try:
+                from modules.pipeline.scheduler import run_pipeline_once
+                threading.Thread(target=run_pipeline_once, daemon=True).start()
+            except Exception as e:
+                send_message(f"Error: {e}")

@@ -20,7 +20,7 @@
         <tbody>
             {% for t in tracks %}
             <tr>
-                <td>{{ t.id }}</td>
+                <td><a href="{{ url_for('track_detail', track_id=t.id) }}">{{ t.id }}</a></td>
                 <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ t.suno_prompt }}">{{ t.suno_prompt[:80] }}</td>
                 <td><span class="badge badge-gray">{{ t.suno_style }}</span></td>
                 <td>{{ "%.0f"|format(t.duration_seconds) if t.duration_seconds else '—' }}s</td>

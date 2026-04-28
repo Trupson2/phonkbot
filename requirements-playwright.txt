@@ -1,0 +1,5 @@
+# Optional — only needed if you run tools/refresh_captcha.py or use the
+# Playwright autotoken refresh strategy. After install:
+#     playwright install chromium --with-deps
+# On Raspberry Pi OS Bookworm with PEP 668: use a venv.
+playwright>=1.40.0

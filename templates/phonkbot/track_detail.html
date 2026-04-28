@@ -1,0 +1,94 @@
+{% extends "phonkbot/base.html" %}
+{% set active = 'tracks' %}
+
+{% block content %}
+<div class="card">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <a href="{{ url_for('tracks') }}" class="btn btn-gray" style="padding:6px 12px">&larr; Back</a>
+        <div class="card-title" style="margin:0">Track #{{ track.id }} — {{ track.title or '(no title)' }}</div>
+        {% if track.status == 'published' %}<span class="badge badge-green">Published</span>
+        {% elif track.status == 'approved' %}<span class="badge badge-blue">Approved</span>
+        {% elif track.status == 'ready_for_review' %}<span class="badge badge-yellow">Review</span>
+        {% elif track.status == 'rejected' %}<span class="badge badge-red">Rejected</span>
+        {% elif track.status == 'failed' %}<span class="badge badge-red">Failed</span>
+        {% else %}<span class="badge badge-gray">{{ track.status }}</span>{% endif %}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:20px">
+        <div>
+            <div style="color:#64748b;font-size:0.85rem;margin-bottom:6px">Prompt</div>
+            <div style="background:#0f172a;padding:12px;border-radius:8px;font-family:monospace;font-size:0.85rem">{{ track.suno_prompt }}</div>
+
+            <div style="color:#64748b;font-size:0.85rem;margin:16px 0 6px">Style</div>
+            <div><span class="badge badge-gray">{{ track.suno_style }}</span></div>
+
+            <div style="color:#64748b;font-size:0.85rem;margin:16px 0 6px">Model / Duration / Created</div>
+            <div>{{ track.model or '—' }} &middot; {{ "%.1f"|format(track.duration_seconds) if track.duration_seconds else '—' }}s &middot; {{ track.created_at[:16] if track.created_at else '—' }}</div>
+
+            {% if track.reject_reason %}
+            <div style="color:#64748b;font-size:0.85rem;margin:16px 0 6px">Reject reason</div>
+            <div style="background:#3f1d1d;padding:10px;border-radius:8px;font-style:italic">{{ track.reject_reason }}</div>
+            {% endif %}
+
+            {% if sibling %}
+            <div style="color:#64748b;font-size:0.85rem;margin:16px 0 6px">Sibling version (same generation request)</div>
+            <a href="{{ url_for('track_detail', track_id=sibling.id) }}" class="btn btn-gray" style="padding:6px 12px">
+                &rarr; Track #{{ sibling.id }} ({{ "%.0f"|format(sibling.duration_seconds) if sibling.duration_seconds else '?' }}s)
+            </a>
+            {% endif %}
+
+            {% if publication and publication.youtube_video_id %}
+            <div style="color:#64748b;font-size:0.85rem;margin:16px 0 6px">YouTube</div>
+            <a href="https://youtube.com/watch?v={{ publication.youtube_video_id }}" target="_blank">{{ publication.title or 'Watch' }}</a>
+            {% endif %}
+        </div>
+
+        <div>
+            {% if track.audio_path %}
+            <div style="color:#64748b;font-size:0.85rem;margin-bottom:6px">Audio</div>
+            <audio controls style="width:100%" src="/output/audio/track_{{ track.id }}.mp3"></audio>
+            {% endif %}
+
+            {% if video and video.video_path %}
+            <div style="color:#64748b;font-size:0.85rem;margin:16px 0 6px">Video preview</div>
+            <video controls style="width:100%;max-height:360px" src="/output/videos/track_{{ track.id }}.mp4"></video>
+            {% endif %}
+
+            {% if track.status in ('ready_for_review', 'rejected') %}
+            <div style="display:flex;gap:8px;margin-top:20px">
+                <button class="btn btn-green" onclick="approveTrack({{ track.id }})">&#10003; Approve &amp; publish</button>
+                <button class="btn btn-red" onclick="rejectTrack({{ track.id }})">&#10005; Reject</button>
+                <button class="btn btn-gray" onclick="regenTrack({{ track.id }})">&#8635; Regenerate</button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+async function approveTrack(id) {
+    if (!confirm('Approve and publish track #' + id + '?')) return;
+    const r = await fetch('/tracks/' + id + '/approve', {method: 'POST'});
+    const j = await r.json();
+    alert(j.status === 'ok' ? 'Approved — render + upload started' : ('Error: ' + j.message));
+    if (j.status === 'ok') location.reload();
+}
+async function rejectTrack(id) {
+    const reason = prompt('Reject reason (Polish, will train the model):') || '';
+    const r = await fetch('/tracks/' + id + '/reject', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reason: reason})
+    });
+    const j = await r.json();
+    if (j.status === 'ok') location.reload();
+    else alert('Error: ' + j.message);
+}
+async function regenTrack(id) {
+    if (!confirm('Spawn a regenerated version of track #' + id + '?')) return;
+    const r = await fetch('/tracks/' + id + '/regen', {method: 'POST'});
+    const j = await r.json();
+    alert(j.message || j.status);
+}
+</script>
+{% endblock %}
